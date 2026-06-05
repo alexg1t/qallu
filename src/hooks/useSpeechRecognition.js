@@ -249,8 +249,13 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     audioContextRef.current?.resume().catch(() => {})
     try {
       recognitionRef.current.start()
-    } catch {
-      // already running
+    } catch (e) {
+      setError({
+        code: 'start-failed',
+        message: 'No se pudo iniciar el reconocimiento de voz en este dispositivo.',
+      })
+      isListeningRef.current = false
+      setIsListening(false)
     }
   }, [isSupported])
 
