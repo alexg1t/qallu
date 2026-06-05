@@ -194,6 +194,22 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
               Precisión actual: {Math.round(accuracy * 100)}%
             </div>
           )}
+
+          {session.status === 'active' && (speech.finalTranscript || speech.interimTranscript) && (
+            <div className="w-full max-w-md bg-gray-100 border border-gray-200 rounded-lg p-3 text-xs">
+              <p className="text-gray-400 font-medium mb-1">Debug — lo que escucha:</p>
+              {speech.finalTranscript && (
+                <p className="text-green-700 break-words">
+                  <span className="text-gray-400">final:</span> {speech.finalTranscript}
+                </p>
+              )}
+              {speech.interimTranscript && (
+                <p className="text-amber-600 break-words mt-0.5">
+                  <span className="text-gray-400">interim:</span> {speech.interimTranscript}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
