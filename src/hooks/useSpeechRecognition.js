@@ -9,6 +9,9 @@ const ERROR_MESSAGES = {
 }
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+// On Android, getUserMedia and SpeechRecognition compete for the mic: opening
+// a stream while recognition is active silently stops results from arriving.
+const IS_ANDROID = /Android/i.test(navigator.userAgent)
 
 export function useSpeechRecognition({ lang = 'es' } = {}) {
   const [isListening, setIsListening] = useState(false)
@@ -50,10 +53,6 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
   // than startListening time because it excludes pre-speech silence).
   const firstResultTimeRef = useRef(null)
 
-  // Ref mirror of recognitionStarted state + resolver used by startSegmentRecording
-  // to wait for rec.onstart before opening getUserMedia (avoids mic conflict on Android).
-  const recognitionActiveRef = useRef(false)
-  const recognitionStartResolverRef = useRef(null)
 
   const isSupported = Boolean(SpeechRecognition)
 
@@ -68,11 +67,6 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
 
     rec.onstart = () => {
       setRecognitionStarted(true)
-      recognitionActiveRef.current = true
-      if (recognitionStartResolverRef.current) {
-        recognitionStartResolverRef.current()
-        recognitionStartResolverRef.current = null
-      }
     }
 
     rec.onresult = (event) => {
@@ -277,7 +271,6 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     amplitudeSamplesRef.current = []
     firstResultTimeRef.current = null
     isListeningRef.current = true
-    recognitionActiveRef.current = false
     setIsListening(true)
     audioContextRef.current?.resume().catch(() => {})
     try {
@@ -482,18 +475,14 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
   }
 
   const startSegmentRecording = useCallback(async () => {
+    // Android: SpeechRecognition and getUserMedia cannot share the mic — a live
+    // stream silently kills recognition results. Skip recording entirely when
+    // recognition is active; intonation/emphasis fall back to null → auto-correct.
+    if (IS_ANDROID && isListeningRef.current) return
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       segmentResolverRef.current = null
       try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
-    }
-    // On Android, opening getUserMedia while SpeechRecognition is still
-    // initializing causes a mic conflict that silently kills recognition.
-    // Wait for rec.onstart to confirm the recognizer is fully active first.
-    if (isListeningRef.current && !recognitionActiveRef.current) {
-      await new Promise(resolve => {
-        recognitionStartResolverRef.current = resolve
-        setTimeout(resolve, 2000)  // fallback: don't block forever
-      })
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
