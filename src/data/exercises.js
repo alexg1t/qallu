@@ -4,6 +4,13 @@ function makeTokens(text) {
   return text.replace(/[.,;:¡!¿?]/g, '').split(/\s+/).filter(Boolean)
 }
 
+// Like makeTokens but keeps leading/trailing punctuation on each word so it
+// renders visibly (e.g. '¿Tienes', 'hambre?'). wordMatcher normalizes these
+// away for matching, so speech recognition still works correctly.
+function makeDisplayTokens(text) {
+  return text.trim().split(/\s+/).filter(Boolean)
+}
+
 // ─── MINIMAL PAIRS ────────────────────────────────────────────────────────────
 
 const minimalPairsExercises = [
@@ -387,6 +394,107 @@ const tonguetwisterExercises = [
   },
 ]
 
+// ─── INTONATION FOCUS ─────────────────────────────────────────────────────────
+
+const intonationExercises = [
+  {
+    id: 'in-001',
+    type: 'intonation-focus',
+    title: 'Pregunta o afirmación',
+    description: 'La misma frase cambia de significado según si la voz sube o baja al final. Practica el contraste entre entonación ascendente (pregunta) y descendente (afirmación).',
+    difficulty: 'intermediate',
+    estimatedMinutes: 3,
+    content: {
+      items: [
+        {
+          text: '¿Tienes hambre?',
+          tokens: makeDisplayTokens('¿Tienes hambre?'),
+          targetPattern: 'rising',
+          hint: 'Pregunta — sube el tono al final',
+        },
+        {
+          text: 'Tienes hambre.',
+          tokens: makeDisplayTokens('Tienes hambre.'),
+          targetPattern: 'falling',
+          hint: 'Afirmación — baja el tono al final',
+        },
+        {
+          text: '¿Viene mañana?',
+          tokens: makeDisplayTokens('¿Viene mañana?'),
+          targetPattern: 'rising',
+          hint: 'Pregunta total — entonación ascendente',
+        },
+        {
+          text: 'Viene mañana.',
+          tokens: makeDisplayTokens('Viene mañana.'),
+          targetPattern: 'falling',
+          hint: 'Afirmación — entonación descendente',
+        },
+        {
+          text: '¿Estás seguro?',
+          tokens: makeDisplayTokens('¿Estás seguro?'),
+          targetPattern: 'rising',
+          hint: 'Duda expresada como pregunta — voz asciende',
+        },
+        {
+          text: 'Estás seguro.',
+          tokens: makeDisplayTokens('Estás seguro.'),
+          targetPattern: 'falling',
+          hint: 'Certeza — la voz desciende con firmeza',
+        },
+      ],
+    },
+  },
+  {
+    id: 'in-002',
+    type: 'intonation-focus',
+    title: 'Entonación en contexto',
+    description: 'Frases sin par equivalente. El patrón de entonación comunica actitud, certeza o petición. Más exigente porque el oyente no tiene la comparación directa.',
+    difficulty: 'advanced',
+    estimatedMinutes: 4,
+    content: {
+      items: [
+        {
+          text: '¿De verdad lo hiciste?',
+          tokens: makeDisplayTokens('¿De verdad lo hiciste?'),
+          targetPattern: 'rising',
+          hint: 'Sorpresa como pregunta — sube el tono al final',
+        },
+        {
+          text: 'Lo hice lo mejor que pude.',
+          tokens: makeDisplayTokens('Lo hice lo mejor que pude.'),
+          targetPattern: 'falling',
+          hint: 'Afirmación firme — descenso final del tono',
+        },
+        {
+          text: '¿Podrías repetirlo más despacio?',
+          tokens: makeDisplayTokens('¿Podrías repetirlo más despacio?'),
+          targetPattern: 'rising',
+          hint: 'Petición como pregunta cortés — entonación ascendente',
+        },
+        {
+          text: 'Por favor habla más despacio.',
+          tokens: makeDisplayTokens('Por favor habla más despacio.'),
+          targetPattern: 'falling',
+          hint: 'Petición directa — tono desciende con firmeza',
+        },
+        {
+          text: '¿No te parece increíble?',
+          tokens: makeDisplayTokens('¿No te parece increíble?'),
+          targetPattern: 'rising',
+          hint: 'Pregunta retórica — aun así la voz asciende',
+        },
+        {
+          text: 'La situación es bastante complicada.',
+          tokens: makeDisplayTokens('La situación es bastante complicada.'),
+          targetPattern: 'falling',
+          hint: 'Juicio neutro — tono descendente y pausado',
+        },
+      ],
+    },
+  },
+]
+
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 
 export const exercises = [
@@ -394,6 +502,7 @@ export const exercises = [
   ...pacerExercises,
   ...emphasisExercises,
   ...tonguetwisterExercises,
+  ...intonationExercises,
 ]
 
 export function getExercise(id) {
@@ -405,6 +514,7 @@ export const TYPE_LABELS = {
   'visual-pacer': 'Pacer Visual',
   'emphasis-focus': 'Énfasis y Foco',
   'tongue-twister': 'Trabalenguas',
+  'intonation-focus': 'Entonación',
 }
 
 export const DIFFICULTY_LABELS = {

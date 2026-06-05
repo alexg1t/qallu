@@ -12,6 +12,7 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
     exercise,
     currentTokens,
     currentRound,
+    currentItem,
     speech,
     accuracy,
     elapsedSeconds,
@@ -94,6 +95,11 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
             Ronda {session.roundIndex + 1} / {exercise.content.rounds.length}
           </span>
         )}
+        {exercise.type === 'intonation-focus' && (
+          <span className="ml-auto text-sm text-gray-400">
+            {session.sentenceIndex + 1} / {exercise.content.items.length}
+          </span>
+        )}
       </div>
 
       {needsPermission ? (
@@ -119,6 +125,15 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
               {exercise.type === 'emphasis-focus' && currentRound && session.status === 'active' && !session.emphasisCheck && (
                 <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-6 py-3 text-center">
                   <p className="text-sm text-indigo-600 font-medium">{currentRound.meaning}</p>
+                </div>
+              )}
+
+              {exercise.type === 'intonation-focus' && currentItem && session.status === 'active' && !session.intonationCheck && (
+                <div className="bg-violet-50 border border-violet-100 rounded-xl px-6 py-3 text-center">
+                  <p className="text-4xl leading-none mb-1">
+                    {currentItem.targetPattern === 'rising' ? '↗' : '↘'}
+                  </p>
+                  <p className="text-sm text-violet-600 font-medium">{currentItem.hint}</p>
                 </div>
               )}
 
@@ -150,6 +165,13 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
               check={session.emphasisCheck}
               round={currentRound}
               tokens={currentTokens}
+              onConfirm={controls.confirmRound}
+              onRepeat={controls.repeatRound}
+            />
+          ) : session.intonationCheck && currentItem ? (
+            <IntonationFeedback
+              check={session.intonationCheck}
+              item={currentItem}
               onConfirm={controls.confirmRound}
               onRepeat={controls.repeatRound}
             />
@@ -249,4 +271,44 @@ function EmphasisFeedback({ check, round, tokens, onConfirm, onRepeat }) {
       </div>
     </div>
   )
+}
+
+function IntonationFeedback({ check, item, onConfirm, onRepeat }) {
+  const arrow = item.targetPattern === 'rising' ? '↗' : '↘'
+  const label = item.targetPattern === 'rising' ? 'ascendente' : 'descendente'
+
+  if (check === 'correct') {
+    return (
+      <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="bg-green-50 border border-green-200 rounded-xl px-6 py-4 text-center w-full">
+          <p className="text-sm text-green-600 font-semibold mb-1">¡Entonación correcta!</p>
+          <p className="text-4xl leading-none my-2">{arrow}</p>
+          <p className="text-xs text-green-500 italic">{item.hint}</p>
+        </div>
+        <p className="text-xs text-gray-400">Avanzando…</p>
+      </div>
+    )
+  }
+
+  if (check === 'wrong') {
+    return (
+      <div className="w-full max-w-md flex flex-col items-center gap-4">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-6 py-4 text-center w-full">
+          <p className="text-sm text-amber-700 font-semibold mb-1">
+            Se esperaba entonación {label}
+          </p>
+          <p className="text-4xl leading-none my-2">{arrow}</p>
+          <p className="text-xs text-amber-600">{item.hint}</p>
+        </div>
+        <button
+          onClick={onRepeat}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors"
+        >
+          Reintentar
+        </button>
+      </div>
+    )
+  }
+
+  return null
 }

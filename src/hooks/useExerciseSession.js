@@ -17,6 +17,8 @@ function makeInitialState(exercise) {
     // null = no check pending; 'detected' = auto-detected; 'weak' = insufficient;
     // 'manual' = audio data unavailable, fallback to user self-report
     emphasisCheck: null,
+    // null | 'correct' | 'wrong'
+    intonationCheck: null,
     sentenceIndex: 0,
     roundIndex: 0,
     wordStatuses: tokens.map(() => 'pending'),
@@ -42,6 +44,9 @@ function getCurrentTokens(exercise, sentenceIndex) {
   }
   if (exercise.type === 'emphasis-focus') {
     return exercise.content.tokens
+  }
+  if (exercise.type === 'intonation-focus') {
+    return exercise.content.items[sentenceIndex]?.tokens ?? []
   }
   return []
 }
@@ -125,6 +130,32 @@ export function useExerciseSession(exerciseId) {
             handleSentenceDone(sessionRef.current.wordStatuses)
           }, 1500)
         }
+      } else if (allDone && exercise.type === 'intonation-focus') {
+        const item = exercise.content.items[s.sentenceIndex]
+        const endTime = Date.now()
+        const pattern = speech.computeIntonationPattern(endTime)
+        speech.stopListening()
+
+        const intonationCheck = pattern !== null && pattern !== item.targetPattern
+          ? 'wrong'
+          : 'correct'
+
+        setSession(prev => ({
+          ...prev,
+          wordStatuses: statuses,
+          wrongCountAtIdx,
+          currentWordIndex: currentIndex,
+          activeIndex,
+          problemWords: newProblems,
+          correctWords: prev.correctWords + correctWordsDelta,
+          intonationCheck,
+        }))
+
+        if (intonationCheck === 'correct') {
+          emphasisAdvanceTimerRef.current = setTimeout(() => {
+            handleSentenceDone(sessionRef.current.wordStatuses)
+          }, 1500)
+        }
       } else {
         setSession(prev => ({
           ...prev,
@@ -190,6 +221,18 @@ export function useExerciseSession(exerciseId) {
         audioUrl,
       }
     }
+    if (ex.type === 'intonation-focus') {
+      const item = ex.content.items[s.sentenceIndex]
+      const arrow = item?.targetPattern === 'rising' ? '↗' : '↘'
+      return {
+        label: `Frase ${s.sentenceIndex + 1}`,
+        tokens,
+        statuses: finalStatuses,
+        accuracy: tokens.length > 0 ? correctCount / tokens.length : 1,
+        meaning: item ? `${arrow} ${item.hint}` : null,
+        audioUrl,
+      }
+    }
     // visual-pacer: single segment, built in completeSession using prev state
     return null
   }
@@ -237,6 +280,27 @@ export function useExerciseSession(exerciseId) {
           currentWordIndex: 0,
           activeIndex: 0,
           totalWords: prev.totalWords + tokens.length,
+          segmentResults: segment ? [...prev.segmentResults, segment] : prev.segmentResults,
+        }))
+      } else {
+        completeSession(segment)
+      }
+    } else if (ex.type === 'intonation-focus') {
+      const nextIndex = s.sentenceIndex + 1
+      if (nextIndex < ex.content.items.length) {
+        const nextTokens = ex.content.items[nextIndex].tokens
+        speech.resetTranscripts()
+        speech.startListening()
+        speech.startSegmentRecording()
+        setSession(prev => ({
+          ...prev,
+          sentenceIndex: nextIndex,
+          intonationCheck: null,
+          wordStatuses: nextTokens.map(() => 'pending'),
+          wrongCountAtIdx: nextTokens.map(() => 0),
+          currentWordIndex: 0,
+          activeIndex: 0,
+          totalWords: prev.totalWords + nextTokens.length,
           segmentResults: segment ? [...prev.segmentResults, segment] : prev.segmentResults,
         }))
       } else {
@@ -339,6 +403,8 @@ export function useExerciseSession(exerciseId) {
       status: 'active',
       countdownValue: 0,
       startedAt: Date.now(),
+      emphasisCheck: null,
+      intonationCheck: null,
       wordStatuses: tokens.map(() => 'pending'),
       wrongCountAtIdx: tokens.map(() => 0),
       currentWordIndex: 0,
@@ -414,13 +480,17 @@ export function useExerciseSession(exerciseId) {
   // Reset current round to try again (used for 'weak' and 'manual' results)
   const repeatRound = useCallback(() => {
     clearTimeout(emphasisAdvanceTimerRef.current)
-    const tokens = exercise.content.tokens
+    const tokens = exercise.type === 'intonation-focus'
+      ? exercise.content.items[sessionRef.current.sentenceIndex]?.tokens ?? []
+      : exercise.content.tokens
     speech.resetTranscripts()
     speech.startListening()
     setSession(prev => ({
       ...prev,
       emphasisCheck: null,
+      intonationCheck: null,
       wordStatuses: tokens.map(() => 'pending'),
+      wrongCountAtIdx: tokens.map(() => 0),
       currentWordIndex: 0,
       activeIndex: 0,
     }))
@@ -443,6 +513,9 @@ export function useExerciseSession(exerciseId) {
   const currentRound = exercise?.type === 'emphasis-focus'
     ? exercise.content.rounds[session.roundIndex]
     : null
+  const currentItem = exercise?.type === 'intonation-focus'
+    ? exercise.content.items[session.sentenceIndex]
+    : null
 
   const accuracy = session.totalWords > 0
     ? Math.round((session.correctWords / session.totalWords) * 100) / 100
@@ -457,6 +530,7 @@ export function useExerciseSession(exerciseId) {
     exercise,
     currentTokens,
     currentRound,
+    currentItem,
     speech,
     accuracy,
     elapsedSeconds,

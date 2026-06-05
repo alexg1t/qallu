@@ -5,6 +5,7 @@ const TYPE_COLORS = {
   'visual-pacer': 'bg-purple-50 text-purple-700 border-purple-100',
   'emphasis-focus': 'bg-orange-50 text-orange-700 border-orange-100',
   'tongue-twister': 'bg-rose-50 text-rose-700 border-rose-100',
+  'intonation-focus': 'bg-violet-50 text-violet-700 border-violet-100',
 }
 
 const DIFFICULTY_COLORS = {
@@ -19,6 +20,7 @@ export default function ExerciseSelector({ onSelect, exerciseStats, onProgressCl
     'visual-pacer': exercises.filter(e => e.type === 'visual-pacer'),
     'emphasis-focus': exercises.filter(e => e.type === 'emphasis-focus'),
     'tongue-twister': exercises.filter(e => e.type === 'tongue-twister'),
+    'intonation-focus': exercises.filter(e => e.type === 'intonation-focus'),
   }
 
   return (
