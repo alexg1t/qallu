@@ -9,6 +9,7 @@ const ERROR_MESSAGES = {
 }
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+const IS_ANDROID = /Android/i.test(navigator.userAgent)
 
 export function useSpeechRecognition({ lang = 'es' } = {}) {
   const [isListening, setIsListening] = useState(false)
@@ -491,12 +492,14 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
   }, [])
 
   const startSegmentRecording = useCallback(async () => {
+    // On Android, a concurrent getUserMedia stream silently kills SpeechRecognition.
+    // Skip recording while recognition is active; playback won't be available.
+    if (IS_ANDROID && isListeningRef.current) return
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       segmentResolverRef.current = null
       try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
     }
-    // If stream was pre-opened by prepareStream(), reuse it (avoids a second
-    // getUserMedia call while SpeechRecognition is active on Android).
     if (!mediaStreamRef.current) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -513,17 +516,23 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     return new Promise(resolve => {
       stopSampleInterval()
       const mr = mediaRecorderRef.current
-      // Stream stays open — only the MediaRecorder stops so the next segment
-      // can reuse the same stream without reopening getUserMedia.
-      if (!mr || mr.state === 'inactive') { resolve(null); return }
-      segmentResolverRef.current = resolve
-      try { mr.stop() } catch { resolve(null) }
+      if (!mr || mr.state === 'inactive') {
+        closeStream()
+        resolve(null)
+        return
+      }
+      segmentResolverRef.current = (url) => {
+        closeStream()
+        resolve(url)
+      }
+      try { mr.stop() } catch { closeStream(); resolve(null) }
     })
   }, [])
 
   const cancelSegmentRecording = useCallback(() => {
     segmentResolverRef.current = null
     stopSampleInterval()
+    closeStream()
     const mr = mediaRecorderRef.current
     if (mr && mr.state !== 'inactive') {
       try { mr.stop() } catch { /* ignore */ }
