@@ -201,6 +201,7 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
               <p className="text-gray-600">
                 escuchando: {speech.isListening ? 'SÍ' : 'NO'}
                 {' · '}audio: {speech.audioDetected ? 'SÍ' : 'NO'}
+                {' · '}recStarted: {speech.recognitionStarted ? 'SÍ' : 'NO'}
               </p>
               {speech.finalTranscript && (
                 <p className="text-green-700 break-words">

@@ -17,6 +17,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
   const [permissionStatus, setPermissionStatus] = useState('unknown')
   const [error, setError] = useState(null)
   const [audioDetected, setAudioDetected] = useState(false)
+  const [recognitionStarted, setRecognitionStarted] = useState(false)
 
   const recognitionRef = useRef(null)
   const isListeningRef = useRef(false)
@@ -57,9 +58,13 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
 
     const rec = new SpeechRecognition()
     rec.lang = lang
-    rec.continuous = true
+    rec.continuous = false
     rec.interimResults = true
     rec.maxAlternatives = 1
+
+    rec.onstart = () => {
+      setRecognitionStarted(true)
+    }
 
     rec.onresult = (event) => {
       // Mark the start of the utterance on the first result we process.
@@ -139,6 +144,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     }
 
     rec.onend = () => {
+      setRecognitionStarted(false)
       isRestartingRef.current = false
       if (isListeningRef.current) {
         lastFinalIndexRef.current = 0
@@ -238,6 +244,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     setInterimTranscript('')
     setFinalTranscript('')
     setAudioDetected(false)
+    setRecognitionStarted(false)
     lastFinalIndexRef.current = 0
     skipToCurrentRef.current = false
     restartFailCountRef.current = 0
@@ -525,6 +532,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     permissionStatus,
     isListening,
     audioDetected,
+    recognitionStarted,
     interimTranscript,
     finalTranscript,
     error,
