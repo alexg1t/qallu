@@ -331,6 +331,7 @@ export function useExerciseSession(exerciseId) {
         : await speech.stopSegmentRecording()
     }
     speech.stopListening()
+    speech.releaseStream()
     setSession(prev => {
       const pacerSegment = !finalSegment && exercise.type === 'visual-pacer' ? {
         label: 'Texto completo',
@@ -448,6 +449,10 @@ export function useExerciseSession(exerciseId) {
         return
       }
     }
+    // Pre-open the mic stream from the user gesture so SpeechRecognition and
+    // MediaRecorder share it without conflict (opening after rec.start() on
+    // Android silently kills recognition results).
+    await speech.prepareStream()
     setSession(prev => ({ ...prev, status: 'countdown', countdownValue: COUNTDOWN_START }))
   }, [exercise, speech])
 
@@ -467,6 +472,7 @@ export function useExerciseSession(exerciseId) {
     completionStartedRef.current = false
     speech.stopListening()
     speech.cancelSegmentRecording()
+    speech.releaseStream()
     stopPacer()
     clearTimeout(emphasisAdvanceTimerRef.current)
     setSession(makeInitialState(exercise))

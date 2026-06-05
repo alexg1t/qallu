@@ -9,9 +9,6 @@ const ERROR_MESSAGES = {
 }
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-// On Android, getUserMedia and SpeechRecognition compete for the mic: opening
-// a stream while recognition is active silently stops results from arriving.
-const IS_ANDROID = /Android/i.test(navigator.userAgent)
 
 export function useSpeechRecognition({ lang = 'es' } = {}) {
   const [isListening, setIsListening] = useState(false)
@@ -474,50 +471,59 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     } catch { /* MediaRecorder not supported — playback unavailable */ }
   }
 
-  const startSegmentRecording = useCallback(async () => {
-    // Android: SpeechRecognition and getUserMedia cannot share the mic — a live
-    // stream silently kills recognition results. Skip recording entirely when
-    // recognition is active; intonation/emphasis fall back to null → auto-correct.
-    if (IS_ANDROID && isListeningRef.current) return
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      segmentResolverRef.current = null
-      try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
-    }
+  // Opens the mic stream and wires up the AudioContext analyser.
+  // Must be called from a user-gesture handler (button click) before
+  // startListening() so both SpeechRecognition and MediaRecorder share
+  // the mic without conflict on Android. Idempotent — safe to call again.
+  const prepareStream = useCallback(async () => {
+    if (mediaStreamRef.current) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
       ensureAudioContext()
       setupAudioAnalyser(stream)
-      startSampleInterval()
-      _startRecordingFromStream(stream)
-    } catch {
-      // Permission denied or no microphone available — recording unavailable.
-      // SpeechRecognition can still work independently.
+    } catch { /* mic unavailable — recognition still works */ }
+  }, [])
+
+  // Closes the mic stream for the session. Call when the exercise ends.
+  const releaseStream = useCallback(() => {
+    closeStream()
+  }, [])
+
+  const startSegmentRecording = useCallback(async () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      segmentResolverRef.current = null
+      try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
     }
+    // If stream was pre-opened by prepareStream(), reuse it (avoids a second
+    // getUserMedia call while SpeechRecognition is active on Android).
+    if (!mediaStreamRef.current) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        mediaStreamRef.current = stream
+        ensureAudioContext()
+        setupAudioAnalyser(stream)
+      } catch { return }
+    }
+    startSampleInterval()
+    _startRecordingFromStream(mediaStreamRef.current)
   }, [])
 
   const stopSegmentRecording = useCallback(() => {
     return new Promise(resolve => {
       stopSampleInterval()
       const mr = mediaRecorderRef.current
-      if (!mr || mr.state === 'inactive') {
-        closeStream()
-        resolve(null)
-        return
-      }
-      segmentResolverRef.current = (url) => {
-        closeStream()
-        resolve(url)
-      }
-      try { mr.stop() } catch { closeStream(); resolve(null) }
+      // Stream stays open — only the MediaRecorder stops so the next segment
+      // can reuse the same stream without reopening getUserMedia.
+      if (!mr || mr.state === 'inactive') { resolve(null); return }
+      segmentResolverRef.current = resolve
+      try { mr.stop() } catch { resolve(null) }
     })
   }, [])
 
   const cancelSegmentRecording = useCallback(() => {
     segmentResolverRef.current = null
     stopSampleInterval()
-    closeStream()
     const mr = mediaRecorderRef.current
     if (mr && mr.state !== 'inactive') {
       try { mr.stop() } catch { /* ignore */ }
@@ -539,6 +545,8 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     resetTranscripts,
     computeEmphasisScore,
     computeIntonationPattern,
+    prepareStream,
+    releaseStream,
     startSegmentRecording,
     stopSegmentRecording,
     cancelSegmentRecording,
