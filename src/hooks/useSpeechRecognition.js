@@ -31,8 +31,6 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const segmentResolverRef = useRef(null)
-  // True when startSegmentRecording was called before the stream was ready
-  const pendingRecordingRef = useRef(false)
 
   // Tracks how many results from event.results we've already committed.
   // Chrome accumulates all results within a session, so we must skip the ones
@@ -220,8 +218,10 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setPermissionStatus('granted')
       setError(null)
-      mediaStreamRef.current = stream
-      if (!analyserRef.current) setupAudioAnalyser(stream)
+      // Immediately close the stream — on Android Chrome, keeping a live
+      // MediaStream competes with SpeechRecognition for the microphone and
+      // degrades or silences recognition entirely.
+      stream.getTracks().forEach(t => t.stop())
     } catch {
       setPermissionStatus('denied')
       setError({
@@ -242,32 +242,21 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     skipToCurrentRef.current = false
     restartFailCountRef.current = 0
     networkRetryCountRef.current = 0
-    // Reset amplitude tracking for the new listening session
     amplitudeSamplesRef.current = []
     firstResultTimeRef.current = null
-    // Lazy AudioContext + stream setup if permission was pre-granted (requestPermission skipped)
-    if (!analyserRef.current) {
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          mediaStreamRef.current = stream
-          setupAudioAnalyser(stream)
-          // startSegmentRecording may have been called before the stream was ready
-          if (pendingRecordingRef.current) {
-            pendingRecordingRef.current = false
-            _startRecordingFromStream(stream)
-          }
-        })
-        .catch(() => {})
-    }
     isListeningRef.current = true
     setIsListening(true)
-    // Resume AudioContext in case Chrome auto-suspended it (happens for input-only
-    // contexts that have no audio output connected to destination).
     audioContextRef.current?.resume().catch(() => {})
+    try {
+      recognitionRef.current.start()
+    } catch {
+      // already running
+    }
+  }, [isSupported])
 
-    // Sample RMS + fundamental frequency (F0) from the AnalyserNode every 50 ms.
-    // F0 is estimated via autocorrelation — the most direct measure of pitch,
-    // which rises for questions and falls for statements in Spanish.
+  // ── RMS + F0 sampling (only active while recording) ──────────────────────
+
+  function startSampleInterval() {
     clearInterval(sampleIntervalRef.current)
     sampleIntervalRef.current = setInterval(() => {
       const analyser = analyserRef.current
@@ -330,18 +319,26 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
         setAudioDetected(true)
       }
     }, 50)
-    try {
-      recognitionRef.current.start()
-    } catch {
-      // already running
+  }
+
+  function stopSampleInterval() {
+    clearInterval(sampleIntervalRef.current)
+    sampleIntervalRef.current = null
+  }
+
+  function closeStream() {
+    stopSampleInterval()
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      mediaStreamRef.current = null
     }
-  }, [isSupported])
+    analyserRef.current = null
+  }
 
   const stopListening = useCallback(() => {
     if (!recognitionRef.current) return
     isListeningRef.current = false
     setIsListening(false)
-    clearInterval(sampleIntervalRef.current)
     try {
       recognitionRef.current.stop()
     } catch { /* ignore */ }
@@ -470,28 +467,48 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     } catch { /* MediaRecorder not supported — playback unavailable */ }
   }
 
-  const startSegmentRecording = useCallback(() => {
-    if (!mediaStreamRef.current) {
-      // Stream not ready yet (lazy getUserMedia in progress) — set flag so it
-      // starts as soon as the stream arrives in startListening's .then()
-      pendingRecordingRef.current = true
-      return
+  const startSegmentRecording = useCallback(async () => {
+    // Stop any previous recording first
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      segmentResolverRef.current = null
+      try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
     }
-    pendingRecordingRef.current = false
-    _startRecordingFromStream(mediaStreamRef.current)
+    // Open a fresh stream for this segment. On Android Chrome we MUST keep
+    // stream lifetimes short so SpeechRecognition gets exclusive mic access.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaStreamRef.current = stream
+      ensureAudioContext()
+      setupAudioAnalyser(stream)
+      startSampleInterval()
+      _startRecordingFromStream(stream)
+    } catch {
+      // Permission denied or no microphone available — recording unavailable.
+      // SpeechRecognition can still work independently.
+    }
   }, [])
 
   const stopSegmentRecording = useCallback(() => {
     return new Promise(resolve => {
+      stopSampleInterval()
       const mr = mediaRecorderRef.current
-      if (!mr || mr.state === 'inactive') { resolve(null); return }
-      segmentResolverRef.current = resolve
-      try { mr.stop() } catch { resolve(null) }
+      if (!mr || mr.state === 'inactive') {
+        closeStream()
+        resolve(null)
+        return
+      }
+      segmentResolverRef.current = (url) => {
+        closeStream()
+        resolve(url)
+      }
+      try { mr.stop() } catch { closeStream(); resolve(null) }
     })
   }, [])
 
   const cancelSegmentRecording = useCallback(() => {
     segmentResolverRef.current = null
+    stopSampleInterval()
+    closeStream()
     const mr = mediaRecorderRef.current
     if (mr && mr.state !== 'inactive') {
       try { mr.stop() } catch { /* ignore */ }
