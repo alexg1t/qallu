@@ -45,11 +45,15 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
   const sampleIntervalRef = useRef(null)
-  // Each sample: { time: number, rms: number, spectralCentroid: number }
   const amplitudeSamplesRef = useRef([])
   // Timestamp of the first ASR result in the current utterance (more accurate
   // than startListening time because it excludes pre-speech silence).
   const firstResultTimeRef = useRef(null)
+
+  // Ref mirror of recognitionStarted state + resolver used by startSegmentRecording
+  // to wait for rec.onstart before opening getUserMedia (avoids mic conflict on Android).
+  const recognitionActiveRef = useRef(false)
+  const recognitionStartResolverRef = useRef(null)
 
   const isSupported = Boolean(SpeechRecognition)
 
@@ -64,6 +68,11 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
 
     rec.onstart = () => {
       setRecognitionStarted(true)
+      recognitionActiveRef.current = true
+      if (recognitionStartResolverRef.current) {
+        recognitionStartResolverRef.current()
+        recognitionStartResolverRef.current = null
+      }
     }
 
     rec.onresult = (event) => {
@@ -268,6 +277,7 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     amplitudeSamplesRef.current = []
     firstResultTimeRef.current = null
     isListeningRef.current = true
+    recognitionActiveRef.current = false
     setIsListening(true)
     audioContextRef.current?.resume().catch(() => {})
     try {
@@ -472,13 +482,19 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
   }
 
   const startSegmentRecording = useCallback(async () => {
-    // Stop any previous recording first
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       segmentResolverRef.current = null
       try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
     }
-    // Open a fresh stream for this segment. On Android Chrome we MUST keep
-    // stream lifetimes short so SpeechRecognition gets exclusive mic access.
+    // On Android, opening getUserMedia while SpeechRecognition is still
+    // initializing causes a mic conflict that silently kills recognition.
+    // Wait for rec.onstart to confirm the recognizer is fully active first.
+    if (isListeningRef.current && !recognitionActiveRef.current) {
+      await new Promise(resolve => {
+        recognitionStartResolverRef.current = resolve
+        setTimeout(resolve, 2000)  // fallback: don't block forever
+      })
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
