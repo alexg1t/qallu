@@ -179,6 +179,7 @@ export default function ExercisePlayer({ exerciseId, onComplete, onBack }) {
             <ControlBar
               status={session.status}
               isListening={speech.isListening}
+              audioDetected={speech.audioDetected}
               error={session.error || speech.error}
               isSupported={speech.isSupported}
               onStart={controls.start}

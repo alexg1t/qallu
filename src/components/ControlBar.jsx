@@ -1,4 +1,4 @@
-export default function ControlBar({ status, isListening, error, onStart, onPause, onResume, onStop, isSupported }) {
+export default function ControlBar({ status, isListening, audioDetected, error, onStart, onPause, onResume, onStop, isSupported }) {
   if (!isSupported) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center text-amber-800 text-sm">
@@ -9,8 +9,14 @@ export default function ControlBar({ status, isListening, error, onStart, onPaus
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {error && (
+      {error && error.code !== 'network-retrying' && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm max-w-md text-center">
+          {error.message}
+        </div>
+      )}
+
+      {error && error.code === 'network-retrying' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 text-sm max-w-md text-center">
           {error.message}
         </div>
       )}
@@ -33,7 +39,7 @@ export default function ControlBar({ status, isListening, error, onStart, onPaus
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
               </span>
-              Escuchando...
+              {audioDetected ? 'Escuchando...' : 'Esperando voz...'}
             </div>
             <button
               onClick={onPause}

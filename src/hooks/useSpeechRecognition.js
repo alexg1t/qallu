@@ -16,10 +16,16 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
   const [finalTranscript, setFinalTranscript] = useState('')
   const [permissionStatus, setPermissionStatus] = useState('unknown')
   const [error, setError] = useState(null)
+  const [audioDetected, setAudioDetected] = useState(false)
 
   const recognitionRef = useRef(null)
   const isListeningRef = useRef(false)
   const isRestartingRef = useRef(false)
+  const restartFailCountRef = useRef(0)
+  const networkRetryCountRef = useRef(0)
+  const MAX_RESTART_FAILS = 3
+  const MAX_NETWORK_RETRIES = 3
+  const NETWORK_RETRY_DELAY = 2000
 
   const mediaStreamRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -101,8 +107,28 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
 
     rec.onerror = (event) => {
       const msg = ERROR_MESSAGES[event.error]
-      if (msg !== null) {
-        setError({ code: event.error, message: msg || `Error: ${event.error}` })
+
+      if (event.error === 'network') {
+        networkRetryCountRef.current++
+        if (networkRetryCountRef.current <= MAX_NETWORK_RETRIES) {
+          setError({
+            code: 'network-retrying',
+            message: `Reconectando... (intento ${networkRetryCountRef.current}/${MAX_NETWORK_RETRIES})`,
+          })
+          setTimeout(() => {
+            if (isListeningRef.current) {
+              try { rec.start() } catch { /* will retry on next onend */ }
+            }
+          }, NETWORK_RETRY_DELAY)
+          return
+        }
+        networkRetryCountRef.current = 0
+      }
+
+      if (msg !== null && event.error !== 'network') {
+        setError({ code: event.error, message: msg })
+      } else if (msg !== null) {
+        setError({ code: event.error, message: msg || `Error de red. Verifica tu conexión a internet.` })
       }
       const fatal = ['not-allowed', 'network', 'audio-capture']
       if (fatal.includes(event.error)) {
@@ -117,13 +143,23 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     rec.onend = () => {
       isRestartingRef.current = false
       if (isListeningRef.current) {
-        // Each new session starts with a fresh event.results list
         lastFinalIndexRef.current = 0
         isRestartingRef.current = true
         try {
           rec.start()
+          restartFailCountRef.current = 0
         } catch {
           isRestartingRef.current = false
+          restartFailCountRef.current++
+          if (restartFailCountRef.current >= MAX_RESTART_FAILS) {
+            isListeningRef.current = false
+            setIsListening(false)
+            restartFailCountRef.current = 0
+            setError({
+              code: 'restart-failed',
+              message: 'El reconocimiento se detuvo. Verifica tu conexión e inténtalo de nuevo.',
+            })
+          }
         }
       } else {
         setIsListening(false)
@@ -150,23 +186,36 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     }
   }, [])
 
+  // Must be called synchronously inside a user gesture (tap/click) so Android
+  // Chrome allows the AudioContext to start in 'running' state. Creating or
+  // resuming AudioContext asynchronously (e.g. inside a .then() callback) loses
+  // the gesture context and the context stays 'suspended' on mobile.
+  function ensureAudioContext() {
+    if (audioContextRef.current) {
+      audioContextRef.current.resume().catch(() => {})
+      return
+    }
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    audioContextRef.current = ctx
+    ctx.resume().catch(() => {})
+  }
+
   function setupAudioAnalyser(stream) {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext
-      if (!AudioCtx) return
-      const ctx = new AudioCtx()
+      const ctx = audioContextRef.current
+      if (!ctx) return
       const source = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
-      // 2048-point FFT gives ~21 Hz/bin at 44100 Hz — enough resolution for
-      // voice spectral centroid (~500–3000 Hz range).
       analyser.fftSize = 2048
       source.connect(analyser)
-      audioContextRef.current = ctx
       analyserRef.current = analyser
     } catch { /* graceful degradation */ }
   }
 
   const requestPermission = useCallback(async () => {
+    ensureAudioContext()
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setPermissionStatus('granted')
@@ -184,11 +233,15 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
 
   const startListening = useCallback(() => {
     if (!isSupported || !recognitionRef.current) return
+    ensureAudioContext()
     setError(null)
     setInterimTranscript('')
     setFinalTranscript('')
+    setAudioDetected(false)
     lastFinalIndexRef.current = 0
     skipToCurrentRef.current = false
+    restartFailCountRef.current = 0
+    networkRetryCountRef.current = 0
     // Reset amplitude tracking for the new listening session
     amplitudeSamplesRef.current = []
     firstResultTimeRef.current = null
@@ -272,6 +325,10 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
       }
 
       amplitudeSamplesRef.current.push({ time: Date.now(), rms, f0 })
+
+      if (!audioDetected && rms > 0.01) {
+        setAudioDetected(true)
+      }
     }, 50)
     try {
       recognitionRef.current.start()
@@ -445,6 +502,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     isSupported,
     permissionStatus,
     isListening,
+    audioDetected,
     interimTranscript,
     finalTranscript,
     error,
