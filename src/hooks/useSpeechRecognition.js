@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 const ERROR_MESSAGES = {
-  'no-speech': 'No detectamos habla. Asegúrate de que el micrófono está activo.',
+  'no-speech': null,
   'audio-capture': 'No se pudo acceder al micrófono.',
   'not-allowed': 'Permiso de micrófono denegado. Actívalo en la configuración del navegador.',
   'network': 'Error de red. El reconocimiento de voz requiere conexión a internet.',
@@ -58,7 +58,7 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
 
     const rec = new SpeechRecognition()
     rec.lang = lang
-    rec.continuous = false
+    rec.continuous = true
     rec.interimResults = true
     rec.maxAlternatives = 1
 
@@ -336,11 +336,6 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
         }
       }
 
-      // DEV DIAGNOSTIC — remove after confirming detection works
-      if (amplitudeSamplesRef.current.length % 20 === 0) {
-        console.log('[F0 sample]', { rms: rms.toFixed(4), f0: Math.round(f0), bestNormCorr: bestNormCorr.toFixed(3), ctxState: ctx.state, totalSamples: amplitudeSamplesRef.current.length })
-      }
-
       amplitudeSamplesRef.current.push({ time: Date.now(), rms, f0 })
 
       if (!audioDetected && rms > 0.01) {
@@ -429,46 +424,27 @@ export function useSpeechRecognition({ lang = 'es' } = {}) {
     const samples = amplitudeSamplesRef.current
     const startTime = firstResultTimeRef.current
 
-    // DEV DIAGNOSTIC — remove after confirming detection works
-    console.log('[computeIntonationPattern] total samples:', samples.length, '| startTime:', startTime, '| endTime:', endTime)
-
-    if (!startTime || !endTime) {
-      console.log('[computeIntonationPattern] → null: missing startTime or endTime')
-      return null
-    }
+    if (!startTime || !endTime) return null
 
     const inWindow = samples.filter(s => s.time >= startTime && s.time <= endTime)
     const voiced = inWindow.filter(s => s.f0 > 0)
-    console.log('[computeIntonationPattern] in window:', inWindow.length, '| voiced (f0>0):', voiced.length, '| sample f0s:', inWindow.slice(-10).map(s => Math.round(s.f0)))
 
-    if (voiced.length < 5) {
-      console.log('[computeIntonationPattern] → null: voiced.length < 5')
-      return null
-    }
+    if (voiced.length < 5) return null
 
     const n = voiced.length
-    // Compare onset (first 40%) to tail (last 30%)
     const earlySlice = voiced.slice(0, Math.floor(n * 0.4))
     const lateSlice = voiced.slice(Math.floor(n * 0.7))
 
-    if (earlySlice.length < 2 || lateSlice.length < 2) {
-      console.log('[computeIntonationPattern] → null: slices too small')
-      return null
-    }
+    if (earlySlice.length < 2 || lateSlice.length < 2) return null
 
     const avgEarlyF0 = earlySlice.reduce((a, s) => a + s.f0, 0) / earlySlice.length
     const avgLateF0 = lateSlice.reduce((a, s) => a + s.f0, 0) / lateSlice.length
+
+    if (avgEarlyF0 < 75) return null
+
     const ratio = avgLateF0 / avgEarlyF0
-    console.log('[computeIntonationPattern] avgEarlyF0:', Math.round(avgEarlyF0), '| avgLateF0:', Math.round(avgLateF0), '| ratio:', ratio.toFixed(3))
-
-    if (avgEarlyF0 < 75) {
-      console.log('[computeIntonationPattern] → null: avgEarlyF0 < 75')
-      return null
-    }
-
-    if (ratio > 1.10) { console.log('[computeIntonationPattern] → rising'); return 'rising' }
-    if (ratio < 0.90) { console.log('[computeIntonationPattern] → falling'); return 'falling' }
-    console.log('[computeIntonationPattern] → neutral')
+    if (ratio > 1.10) return 'rising'
+    if (ratio < 0.90) return 'falling'
     return 'neutral'
   }, [])
 

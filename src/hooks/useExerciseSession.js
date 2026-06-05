@@ -497,7 +497,10 @@ export function useExerciseSession(exerciseId) {
   }, [exercise, speech])
 
   useEffect(() => {
-    if (speech.error && (session.status === 'requesting-permission' || session.status === 'active')) {
+    const transient = ['no-speech', 'aborted', 'network-retrying']
+    if (speech.error &&
+        !transient.includes(speech.error.code) &&
+        (session.status === 'requesting-permission' || session.status === 'active')) {
       stopPacer()
       setSession(prev => ({ ...prev, status: 'error', error: speech.error }))
     }
