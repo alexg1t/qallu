@@ -20,6 +20,7 @@ function makeInitialState(exercise) {
     sentenceIndex: 0,
     roundIndex: 0,
     wordStatuses: tokens.map(() => 'pending'),
+    wrongCountAtIdx: tokens.map(() => 0),
     currentWordIndex: 0,
     activeIndex: 0,
     startedAt: null,
@@ -71,11 +72,12 @@ export function useExerciseSession(exerciseId) {
 
     if (!spokenTokens.length) return
 
-    const { statuses, currentIndex, activeIndex } = matchSpokenToTarget(
+    const { statuses, currentIndex, activeIndex, wrongCountAtIdx } = matchSpokenToTarget(
       spokenTokens,
       normalizedTargets,
       s.wordStatuses,
       s.currentWordIndex,
+      s.wrongCountAtIdx,
       isFinal
     )
 
@@ -108,6 +110,7 @@ export function useExerciseSession(exerciseId) {
         setSession(prev => ({
           ...prev,
           wordStatuses: statuses,
+          wrongCountAtIdx,
           currentWordIndex: currentIndex,
           activeIndex,
           problemWords: newProblems,
@@ -124,6 +127,7 @@ export function useExerciseSession(exerciseId) {
         setSession(prev => ({
           ...prev,
           wordStatuses: statuses,
+          wrongCountAtIdx,
           currentWordIndex: currentIndex,
           ...(isVisualPacer ? {} : { activeIndex }),
           problemWords: newProblems,
@@ -206,6 +210,7 @@ export function useExerciseSession(exerciseId) {
           ...prev,
           sentenceIndex: nextSentence,
           wordStatuses: nextTokens.map(() => 'pending'),
+          wrongCountAtIdx: nextTokens.map(() => 0),
           currentWordIndex: 0,
           activeIndex: 0,
           totalWords: prev.totalWords + nextTokens.length,
@@ -226,6 +231,7 @@ export function useExerciseSession(exerciseId) {
           roundIndex: nextRound,
           emphasisCheck: null,
           wordStatuses: tokens.map(() => 'pending'),
+          wrongCountAtIdx: tokens.map(() => 0),
           currentWordIndex: 0,
           activeIndex: 0,
           totalWords: prev.totalWords + tokens.length,
@@ -318,6 +324,7 @@ export function useExerciseSession(exerciseId) {
       countdownValue: 0,
       startedAt: Date.now(),
       wordStatuses: tokens.map(() => 'pending'),
+      wrongCountAtIdx: tokens.map(() => 0),
       currentWordIndex: 0,
       activeIndex: 0,
       sentenceIndex: 0,
