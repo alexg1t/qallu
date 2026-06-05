@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.word-token {
+  transition: background-color 80ms ease-in-out, color 80ms ease-in-out;
+  border-radius: 0.2em;
+  padding: 0.05em 0.15em;
+  display: inline;
+  /* font-weight never changes — prevents layout shift on highlight */
+}
