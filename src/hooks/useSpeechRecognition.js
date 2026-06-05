@@ -10,7 +10,7 @@ const ERROR_MESSAGES = {
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
 
-export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
+export function useSpeechRecognition({ lang = 'es' } = {}) {
   const [isListening, setIsListening] = useState(false)
   const [interimTranscript, setInterimTranscript] = useState('')
   const [finalTranscript, setFinalTranscript] = useState('')
@@ -220,13 +220,29 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
 
   const requestPermission = useCallback(async () => {
     ensureAudioContext()
+    // Never call getUserMedia for permission checking. On Xiaomi/Android,
+    // opening the audio device — even briefly — can put the hardware in a
+    // state that blocks SpeechRecognition from accessing the microphone.
+    // Instead, use the Permissions API. For 'prompt' state we still need
+    // getUserMedia to trigger the browser dialog, but we close it instantly.
     try {
+      if (navigator.permissions) {
+        const result = await navigator.permissions.query({ name: 'microphone' })
+        if (result.state === 'denied') {
+          setPermissionStatus('denied')
+          setError({ code: 'not-allowed', message: ERROR_MESSAGES['not-allowed'] })
+          return
+        }
+        if (result.state === 'granted') {
+          setPermissionStatus('granted')
+          setError(null)
+          return
+        }
+        // 'prompt' — need to trigger the permission dialog
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setPermissionStatus('granted')
       setError(null)
-      // Immediately close the stream — on Android Chrome, keeping a live
-      // MediaStream competes with SpeechRecognition for the microphone and
-      // degrades or silences recognition entirely.
       stream.getTracks().forEach(t => t.stop())
     } catch {
       setPermissionStatus('denied')

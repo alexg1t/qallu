@@ -65,7 +65,7 @@ export function useExerciseSession(exerciseId) {
   // Prevents double-completion when the pacer timer fires while handleSentenceDone is awaiting
   const completionStartedRef = useRef(false)
 
-  const speech = useSpeechRecognition({ lang: 'es-ES' })
+  const speech = useSpeechRecognition({ lang: 'es' })
 
   // ── PROCESS SPEECH ──────────────────────────────────────────────────────────
 
