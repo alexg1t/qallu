@@ -81,6 +81,117 @@ const minimalPairsExercises = [
       ],
     },
   },
+  {
+    id: 'mp-003',
+    type: 'minimal-pairs',
+    title: 'La d de "helado"',
+    description: 'La /d/ entre vocales tiende a relajarse o desaparecer en el habla informal ("helao", "nada"→"na"). Entrena su articulación clara para contextos formales.',
+    difficulty: 'intermediate',
+    estimatedMinutes: 4,
+    content: {
+      contrast: 'd intervocálica',
+      sentences: [
+        {
+          id: 's1',
+          text: 'El helado de limón quedó olvidado sobre la mesa',
+          tokens: makeTokens('El helado de limón quedó olvidado sobre la mesa'),
+          targetIndices: [1, 5],
+        },
+        {
+          id: 's2',
+          text: 'El soldado educado cruzó el vado del río',
+          tokens: makeTokens('El soldado educado cruzó el vado del río'),
+          targetIndices: [1, 2, 5],
+        },
+        {
+          id: 's3',
+          text: 'Me han dado un recado de la ciudad pasada',
+          tokens: makeTokens('Me han dado un recado de la ciudad pasada'),
+          targetIndices: [2, 4, 7, 8],
+        },
+        {
+          id: 's4',
+          text: 'Los graduados han llegado al lado opuesto del mercado',
+          tokens: makeTokens('Los graduados han llegado al lado opuesto del mercado'),
+          targetIndices: [1, 3, 5, 9],
+        },
+      ],
+    },
+  },
+  {
+    id: 'mp-004',
+    type: 'minimal-pairs',
+    title: 'Virtud, cristal, ciudad',
+    description: 'Las consonantes en posición final (-d, -z, -l, -r) se relajan en el habla rápida. Practica su articulación precisa sin exagerar: deben sonar, no desaparecer.',
+    difficulty: 'intermediate',
+    estimatedMinutes: 4,
+    content: {
+      contrast: 'consonantes en posición final',
+      sentences: [
+        {
+          id: 's1',
+          text: 'La ciudad recibió luz del sol al final del día',
+          tokens: makeTokens('La ciudad recibió luz del sol al final del día'),
+          targetIndices: [1, 3, 5, 7],
+        },
+        {
+          id: 's2',
+          text: 'El árbol del jardín da calor y paz al hogar',
+          tokens: makeTokens('El árbol del jardín da calor y paz al hogar'),
+          targetIndices: [1, 3, 5, 7, 9],
+        },
+        {
+          id: 's3',
+          text: 'Hay que aprender a hablar con verdad y claridad',
+          tokens: makeTokens('Hay que aprender a hablar con verdad y claridad'),
+          targetIndices: [2, 4, 6, 8],
+        },
+        {
+          id: 's4',
+          text: 'El portal de cristal al final del pasillo da al jardín',
+          tokens: makeTokens('El portal de cristal al final del pasillo da al jardín'),
+          targetIndices: [1, 3, 5, 10],
+        },
+      ],
+    },
+  },
+  {
+    id: 'mp-005',
+    type: 'minimal-pairs',
+    title: 'Transparente y abstracto',
+    description: 'Grupos consonánticos complejos que el habla rápida simplifica: /nstr/, /bstr/, /xact/, /nsp/. La dicción formal exige articularlos íntegramente.',
+    difficulty: 'advanced',
+    estimatedMinutes: 4,
+    content: {
+      contrast: 'grupos consonánticos',
+      sentences: [
+        {
+          id: 's1',
+          text: 'El inspector describió la transacción con exactitud',
+          tokens: makeTokens('El inspector describió la transacción con exactitud'),
+          targetIndices: [1, 2, 3, 5],
+        },
+        {
+          id: 's2',
+          text: 'La construcción abstracta requiere gran precisión',
+          tokens: makeTokens('La construcción abstracta requiere gran precisión'),
+          targetIndices: [1, 2, 5],
+        },
+        {
+          id: 's3',
+          text: 'La circunstancia obstaculizó el progreso del proyecto',
+          tokens: makeTokens('La circunstancia obstaculizó el progreso del proyecto'),
+          targetIndices: [1, 2, 4, 6],
+        },
+        {
+          id: 's4',
+          text: 'El transportista transcribió los datos con perspectiva',
+          tokens: makeTokens('El transportista transcribió los datos con perspectiva'),
+          targetIndices: [1, 2, 6],
+        },
+      ],
+    },
+  },
 ]
 
 // ─── VISUAL PACER ─────────────────────────────────────────────────────────────
@@ -123,6 +234,30 @@ const pacerExercises = [
     difficulty: 'advanced',
     text: 'La comunicación efectiva requiere no solo claridad en el mensaje sino también conciencia del receptor y del contexto situacional',
     targetSyllablesPerSecond: 5.5,
+  }),
+  makePacerExercise({
+    id: 'vp-004',
+    title: 'El Quijote — Cervantes',
+    description: 'La prosa de Cervantes tiene cláusulas largas y un ritmo marcado. Sigue el pacer sin perder la musicalidad: cada grupo fónico debe llegar entero.',
+    difficulty: 'beginner',
+    text: 'En un lugar de la Mancha de cuyo nombre no quiero acordarme no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero adarga antigua rocín flaco y galgo corredor',
+    targetSyllablesPerSecond: 3.8,
+  }),
+  makePacerExercise({
+    id: 'vp-005',
+    title: 'Divulgación — comunicación no verbal',
+    description: 'Texto de divulgación a ritmo intermedio-alto. El léxico específico y las frases largas exigen mantener articulación clara sin perder la velocidad.',
+    difficulty: 'intermediate',
+    text: 'La comunicación no verbal representa más del sesenta por ciento del mensaje total en una conversación presencial y tiene un impacto directo en cómo perciben los demás nuestra credibilidad y nivel de autoridad',
+    targetSyllablesPerSecond: 4.8,
+  }),
+  makePacerExercise({
+    id: 'vp-006',
+    title: 'Discurso formal — libertad y democracia',
+    description: 'Velocidad de conferencia o discurso político. El pacer no perdona las sílabas tónicas débiles: cada palabra debe llegar con igual peso articulatorio.',
+    difficulty: 'advanced',
+    text: 'La libertad de expresión es el fundamento de toda sociedad democrática y su defensa exige no solo valentía individual sino también instituciones sólidas que protejan el derecho a disentir',
+    targetSyllablesPerSecond: 5.2,
   }),
 ]
 
