@@ -25,6 +25,8 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const segmentResolverRef = useRef(null)
+  // True when startSegmentRecording was called before the stream was ready
+  const pendingRecordingRef = useRef(false)
 
   // Tracks how many results from event.results we've already committed.
   // Chrome accumulates all results within a session, so we must skip the ones
@@ -190,7 +192,15 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     // Lazy AudioContext + stream setup if permission was pre-granted (requestPermission skipped)
     if (!analyserRef.current) {
       navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => { mediaStreamRef.current = stream; setupAudioAnalyser(stream) })
+        .then(stream => {
+          mediaStreamRef.current = stream
+          setupAudioAnalyser(stream)
+          // startSegmentRecording may have been called before the stream was ready
+          if (pendingRecordingRef.current) {
+            pendingRecordingRef.current = false
+            _startRecordingFromStream(stream)
+          }
+        })
         .catch(() => {})
     }
     // Start amplitude sampling
@@ -258,8 +268,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     return avgFull > 0.001 ? avgTarget / avgFull : null
   }, [])
 
-  const startSegmentRecording = useCallback(() => {
-    if (!mediaStreamRef.current) return
+  function _startRecordingFromStream(stream) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       segmentResolverRef.current = null
       try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
@@ -268,7 +277,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
     try {
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus' : ''
-      const mr = new MediaRecorder(mediaStreamRef.current, mimeType ? { mimeType } : {})
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {})
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.onstop = () => {
         if (segmentResolverRef.current) {
@@ -280,6 +289,17 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
       mediaRecorderRef.current = mr
       mr.start()
     } catch { /* MediaRecorder not supported — playback unavailable */ }
+  }
+
+  const startSegmentRecording = useCallback(() => {
+    if (!mediaStreamRef.current) {
+      // Stream not ready yet (lazy getUserMedia in progress) — set flag so it
+      // starts as soon as the stream arrives in startListening's .then()
+      pendingRecordingRef.current = true
+      return
+    }
+    pendingRecordingRef.current = false
+    _startRecordingFromStream(mediaStreamRef.current)
   }, [])
 
   const stopSegmentRecording = useCallback(() => {

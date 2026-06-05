@@ -9,7 +9,6 @@ export default function ResultsCard({ exercise, accuracy, elapsedSeconds, segmen
   const accuracyColor = pct >= 85 ? 'text-green-600' : pct >= 60 ? 'text-amber-500' : 'text-red-500'
 
   const hasProblems = segmentResults.some(s => s.accuracy < 1)
-  const hasAudio = segmentResults.some(s => s.audioUrl)
 
   const wpmColor = targetWpm
     ? (wpm >= targetWpm * 0.9 ? 'text-green-600' : wpm >= targetWpm * 0.7 ? 'text-amber-500' : 'text-red-500')
@@ -37,13 +36,7 @@ export default function ResultsCard({ exercise, accuracy, elapsedSeconds, segmen
         )}
       </div>
 
-      {!hasProblems && !hasAudio && (
-        <p className="text-green-600 font-medium text-center">
-          ¡Perfecto! Todas las palabras reconocidas correctamente.
-        </p>
-      )}
-
-      {(hasProblems || hasAudio) && segmentResults.length > 0 && (
+      {segmentResults.length > 0 && (
         <div className="w-full space-y-3">
           <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
             Desglose por {exercise.type === 'minimal-pairs' || exercise.type === 'tongue-twister' ? 'oración' : exercise.type === 'emphasis-focus' ? 'ronda' : 'ejercicio'}
