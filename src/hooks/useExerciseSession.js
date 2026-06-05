@@ -57,6 +57,8 @@ export function useExerciseSession(exerciseId) {
   const pacerWordRef = useRef(0)
   // Timer that auto-advances after a 'detected' emphasis result
   const emphasisAdvanceTimerRef = useRef(null)
+  // Prevents double-completion when the pacer timer fires while handleSentenceDone is awaiting
+  const completionStartedRef = useRef(false)
 
   const speech = useSpeechRecognition({ lang: 'es-ES' })
 
@@ -241,19 +243,32 @@ export function useExerciseSession(exerciseId) {
         completeSession(segment)
       }
     } else {
-      completeSession(segment)
+      // visual-pacer: buildSegment returns null, so pass audioUrl directly to
+      // completeSession — calling stopSegmentRecording() again would find the
+      // recorder already inactive and return null.
+      completeSession(null, audioUrl)
     }
   }, [exercise, speech])
 
-  const completeSession = useCallback(async (finalSegment) => {
-    speech.stopListening()
+  // preRecordedUrl: for visual-pacer when handleSentenceDone already captured
+  // the audio (user finished all words before the timer). Pass it through so
+  // the second stopSegmentRecording() call (on an already-inactive recorder)
+  // doesn't produce null.
+  const completeSession = useCallback(async (finalSegment, preRecordedUrl) => {
+    if (completionStartedRef.current) return
+    completionStartedRef.current = true
     stopPacer()
-    // For visual-pacer the recording runs for the whole session; stop it now
-    const pacerAudioUrl = !finalSegment && exercise.type === 'visual-pacer'
-      ? await speech.stopSegmentRecording()
-      : null
+    // Stop recording BEFORE stopping ASR: Chrome may release the audio track
+    // when SpeechRecognition.stop() fires, which would kill the MediaRecorder.
+    let pacerAudioUrl = null
+    if (!finalSegment && exercise.type === 'visual-pacer') {
+      pacerAudioUrl = preRecordedUrl !== undefined
+        ? preRecordedUrl
+        : await speech.stopSegmentRecording()
+    }
+    speech.stopListening()
     setSession(prev => {
-      const pacerSegment = pacerAudioUrl !== undefined && !finalSegment && exercise.type === 'visual-pacer' ? {
+      const pacerSegment = !finalSegment && exercise.type === 'visual-pacer' ? {
         label: 'Texto completo',
         tokens: exercise.content.tokens,
         statuses: prev.wordStatuses,
@@ -317,6 +332,7 @@ export function useExerciseSession(exerciseId) {
   // without needing it as a dep (avoids clearing the timer on each re-render).
   const activateRef = useRef(null)
   activateRef.current = () => {
+    completionStartedRef.current = false
     const tokens = getCurrentTokens(exercise, 0)
     setSession(prev => ({
       ...prev,
@@ -382,6 +398,7 @@ export function useExerciseSession(exerciseId) {
   }, [exercise, speech])
 
   const stop = useCallback(() => {
+    completionStartedRef.current = false
     speech.stopListening()
     speech.cancelSegmentRecording()
     stopPacer()

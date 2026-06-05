@@ -287,7 +287,7 @@ export function useSpeechRecognition({ lang = 'es-ES' } = {}) {
         }
       }
       mediaRecorderRef.current = mr
-      mr.start()
+      mr.start(1000)
     } catch { /* MediaRecorder not supported — playback unavailable */ }
   }
 

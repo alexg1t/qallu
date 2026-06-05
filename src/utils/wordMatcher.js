@@ -1,19 +1,27 @@
 import { normalize } from './textNormalization.js'
 
 const LOOKAHEAD = 2
-// How many wrong words at the same target position before it's forced to 'missed'.
-// 1 wrong word is tolerated (self-correction, ASR noise). 3+ is clearly wrong.
-const NOISE_THRESHOLD = 3
 
 /**
  * Match spoken tokens against target tokens starting from currentIndex.
  *
- * @param {string[]} spokenTokens - raw words from ASR
- * @param {string[]} normalizedTargets - pre-normalized target tokens
- * @param {string[]} statuses - current status array ('pending'|'active'|'correct'|'missed')
- * @param {number} currentIndex - pointer into target tokens
- * @param {number[]} wrongCountAtIdx - wrong-word count per target position (persisted across calls)
- * @param {boolean} isFinal - if false, only compute activeIndex without locking statuses
+ * Wrong-word handling:
+ * - Any word that doesn't match the current position OR the lookahead window,
+ *   AND isn't a word that already appeared earlier in the target (prior-target skip),
+ *   is counted as a wrong word at the current position.
+ * - The first wrong word at a position immediately marks it as 'missed' and
+ *   advances the pointer — self-correction after an error gives no credit.
+ * - Prior-target skip: if the spoken word matches a target word already consumed
+ *   (index < currentIndex), it is skipped silently so repeated target words don't
+ *   cascade-fail the rest of the sentence.
+ * - wrongCountAtIdx is persisted across calls so cross-utterance errors accumulate.
+ *
+ * @param {string[]} spokenTokens
+ * @param {string[]} normalizedTargets
+ * @param {string[]} statuses
+ * @param {number}   currentIndex
+ * @param {number[]} wrongCountAtIdx - persisted across calls
+ * @param {boolean}  isFinal
  * @returns {{ statuses, currentIndex, activeIndex, wrongCountAtIdx }}
  */
 export function matchSpokenToTarget(
@@ -29,15 +37,17 @@ export function matchSpokenToTarget(
     const norm = normalize(spoken)
     if (!norm) continue
 
+    // ── exact match at current position ────────────────────────────────────
     if (norm === normalizedTargets[idx]) {
       if (isFinal) {
-        // If too many wrong words came before this match, it still counts as missed
-        newStatuses[idx] = newWrongCount[idx] >= NOISE_THRESHOLD ? 'missed' : 'correct'
+        // A prior wrong word at this position means it was already failed
+        newStatuses[idx] = newWrongCount[idx] > 0 ? 'missed' : 'correct'
       }
       idx++
       continue
     }
 
+    // ── lookahead: user skipped a word (within LOOKAHEAD window) ───────────
     let foundAhead = false
     const limit = Math.min(idx + LOOKAHEAD, normalizedTargets.length - 1)
     for (let ahead = idx + 1; ahead <= limit; ahead++) {
@@ -51,14 +61,19 @@ export function matchSpokenToTarget(
         break
       }
     }
+    if (foundAhead) continue
 
-    if (!foundAhead && isFinal) {
+    // ── prior-target skip: word appears earlier in the sentence ────────────
+    // Handles sentences like "pues la vaca…" where "la" echoes a prior target.
+    if (normalizedTargets.slice(0, idx).includes(norm)) continue
+
+    // ── genuinely wrong word ────────────────────────────────────────────────
+    if (isFinal) {
       newWrongCount[idx] = (newWrongCount[idx] || 0) + 1
-      // Threshold exceeded: force this position to missed and move on
-      if (newWrongCount[idx] >= NOISE_THRESHOLD) {
-        newStatuses[idx] = 'missed'
-        idx++
-      }
+      // First wrong word is enough — mark missed and advance immediately.
+      // Self-correction after an error does not give credit.
+      newStatuses[idx] = 'missed'
+      idx++
     }
   }
 
